@@ -1,0 +1,5 @@
+{
+  "name": "Neko-BF暗喵调参软件。",
+  "description": "一个由超级猫娘程序员开发的BetaFlight黑匣子日志AI自动调参软件，支持BBL日志分析与双模式PID调节建议。",
+  "requestFramePermissions": []
+}
