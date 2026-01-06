@@ -30,6 +30,20 @@ export const LogAnalysis: React.FC<LogAnalysisProps> = ({ onAnalyzed }) => {
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      // 定义 PID 轴的通式，减少重复代码
+      const pidAxisSchema = {
+        type: Type.OBJECT,
+        properties: {
+          p: { type: Type.NUMBER },
+          i: { type: Type.NUMBER },
+          d: { type: Type.NUMBER },
+          dMax: { type: Type.NUMBER },
+          ff: { type: Type.NUMBER },
+        },
+        required: ['p', 'i', 'd', 'dMax', 'ff']
+      };
+
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `作为一个精通BetaFlight黑匣子分析的程序员猫娘，请分析文件 "${fileName}"。
@@ -39,17 +53,9 @@ export const LogAnalysis: React.FC<LogAnalysisProps> = ({ onAnalyzed }) => {
         分析指南：
         1. 自动识别日志包含的数据：
            - 只有标准数据 (Gyro/Filtered) -> 给出“标准解析”建议。
-           - 包含 DEBUG (GYRO_SCALED/PID_LOOP) -> 给出“高精解析/极限解析”建议，并详细分析滤波器延迟。
+           - 包含 DEBUG (GYRO_SCALED/PID_LOOP) -> 给出“高精解析/极限解析”建议。
         2. 识别装机问题：共振、螺丝、电容、桨叶。
-        3. 以超级可爱的猫娘语气返回 JSON。
-
-        返回 JSON 结构：
-        - logFidelity: '标准解析' | '高精解析' | '极限解析' (根据数据质量判断)
-        - suggestion: 综合报告
-        - diagnostics: 数组，包含 { module, status, issue, advice }。
-        - vibrationScore, responsivenessScore, flightStats, motorStatus, fftData, stepResponse, pids, modernPids, filters, cliCommands。
-        
-        注意：如果只有标准数据，请在诊断中温柔地提示用户：“如果下次开启 set debug_mode = GYRO_SCALED，猫娘能看得更准喵！”`,
+        3. 以超级可爱的猫娘语气返回 JSON。`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -57,6 +63,8 @@ export const LogAnalysis: React.FC<LogAnalysisProps> = ({ onAnalyzed }) => {
             properties: {
               logFidelity: { type: Type.STRING },
               suggestion: { type: Type.STRING },
+              vibrationScore: { type: Type.NUMBER },
+              responsivenessScore: { type: Type.NUMBER },
               diagnostics: {
                 type: Type.ARRAY,
                 items: {
@@ -66,20 +74,90 @@ export const LogAnalysis: React.FC<LogAnalysisProps> = ({ onAnalyzed }) => {
                     status: { type: Type.STRING },
                     issue: { type: Type.STRING },
                     advice: { type: Type.STRING }
-                  }
+                  },
+                  required: ['module', 'status', 'issue', 'advice']
                 }
               },
-              vibrationScore: { type: Type.NUMBER },
-              responsivenessScore: { type: Type.NUMBER },
-              flightStats: { type: Type.OBJECT },
-              motorStatus: { type: Type.OBJECT },
-              fftData: { type: Type.ARRAY, items: { type: Type.OBJECT } },
-              stepResponse: { type: Type.ARRAY, items: { type: Type.OBJECT } },
-              pids: { type: Type.OBJECT },
-              modernPids: { type: Type.OBJECT },
-              filters: { type: Type.OBJECT },
+              flightStats: {
+                type: Type.OBJECT,
+                properties: {
+                  duration: { type: Type.STRING },
+                  loopRate: { type: Type.STRING },
+                  noiseLevel: { type: Type.STRING },
+                  avgThrottle: { type: Type.NUMBER },
+                  latencyMs: { type: Type.NUMBER }
+                },
+                required: ['duration', 'loopRate', 'noiseLevel', 'avgThrottle', 'latencyMs']
+              },
+              motorStatus: {
+                type: Type.OBJECT,
+                properties: {
+                  m1: { type: Type.NUMBER },
+                  m2: { type: Type.NUMBER },
+                  m3: { type: Type.NUMBER },
+                  m4: { type: Type.NUMBER },
+                  predictedTemp: { type: Type.NUMBER }
+                },
+                required: ['m1', 'm2', 'm3', 'm4', 'predictedTemp']
+              },
+              fftData: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    freq: { type: Type.NUMBER },
+                    raw: { type: Type.NUMBER },
+                    filtered: { type: Type.NUMBER }
+                  },
+                  required: ['freq', 'raw', 'filtered']
+                }
+              },
+              stepResponse: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    time: { type: Type.NUMBER },
+                    setpoint: { type: Type.NUMBER },
+                    actual: { type: Type.NUMBER }
+                  },
+                  required: ['time', 'setpoint', 'actual']
+                }
+              },
+              pids: {
+                type: Type.OBJECT,
+                properties: {
+                  roll: pidAxisSchema,
+                  pitch: pidAxisSchema,
+                  yaw: pidAxisSchema
+                },
+                required: ['roll', 'pitch', 'yaw']
+              },
+              modernPids: {
+                type: Type.OBJECT,
+                properties: {
+                  dDamping: { type: Type.NUMBER },
+                  piTracking: { type: Type.NUMBER },
+                  stickResponseFF: { type: Type.NUMBER },
+                  dynamicDampingDMax: { type: Type.NUMBER },
+                  driftWobbleIGain: { type: Type.NUMBER },
+                  pitchRollDRatio: { type: Type.NUMBER },
+                  pitchRollPIFFRatio: { type: Type.NUMBER },
+                  masterMultiplier: { type: Type.NUMBER }
+                },
+                required: ['dDamping', 'piTracking', 'stickResponseFF', 'dynamicDampingDMax', 'driftWobbleIGain', 'pitchRollDRatio', 'pitchRollPIFFRatio', 'masterMultiplier']
+              },
+              filters: {
+                type: Type.OBJECT,
+                properties: {
+                  gyroMultiplier: { type: Type.NUMBER },
+                  dTermMultiplier: { type: Type.NUMBER }
+                },
+                required: ['gyroMultiplier', 'dTermMultiplier']
+              },
               cliCommands: { type: Type.ARRAY, items: { type: Type.STRING } }
-            }
+            },
+            required: ['logFidelity', 'suggestion', 'vibrationScore', 'responsivenessScore', 'diagnostics', 'flightStats', 'motorStatus', 'fftData', 'stepResponse', 'cliCommands']
           }
         }
       });
